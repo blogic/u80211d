@@ -1,0 +1,97 @@
+u80211d
+
+a wifi introspection and scanning daemon for OpenWrt.
+
+the following ubus calls are provided:
+'wifi' @b95a57e0
+	"assoclist":{"ifname":"String"}
+	"scan":{"dump":"Boolean","ifname":"String"}
+	"cac":{"ifname":"String","channel":"Integer","width":"Integer"}
+	"reg":{"country":"String"}
+	"iface":{"phy":"Integer","sta":"Boolean","ap":"Boolean","mon":"Boolean","add":"String","delete":"String"}
+
+assoclist - return a list of stations associated with a BSS
+{
+	"xx:xx:xx:xx:xx:xx": {
+		"mac": "xx:xx:xx:xx:xx:xx",
+		"interface": "wlan0",
+		"signal": 161,
+		"inactive": 1130,
+		"rx_pkt": 34,
+		"tx_pkt": 16,
+		"rx_rate": {
+			"bitrate": 288200,
+			"mhz": 80
+		},
+		"tx_rate": {
+			"bitrate": 12000,
+			"mhz": 20
+		},
+		"rx_bytes": 4836,
+		"tx_bytes": 2362,
+		"tx_retries": 45,
+		"tx_failed": 0
+	}
+}
+
+reg - can be used to get/set the 11D domain
+{
+	"country": "US",
+	"dfs-region": 1
+}
+
+iface - return a list of all local wifi interfaces. it is also possible to
+	create add/del interfaces using this call
+{
+	"wlan0": {
+		"mac": "xx:xx:xx:xx:xx:x",
+		"interface": "wlan0",
+		"dbm": 30,
+		"iftype": "ap"
+	}
+}
+
+scan - trigger a site survey. once complete a notification will be broadcast.
+       upon an event a dump can be read out. automated periodic scanning is
+       also supported.
+{
+	{
+		"mode": "master",
+		"crypto": 1,
+		"channel": 6,
+		"ssid": "MyWifi",
+		"bss_load": {
+			"station_count": 7,
+			"channel_utilization": true,
+			"admission_capacity": 0
+		},
+		"wpa_version": 2,
+		"auth_suites": "psk",
+		"quality": 33,
+		"quality_max": 70
+	}
+}
+
+cac - trigger a DFS scan on a specific channel/width. upon completion a event
+      is broadcast. automated periodic scanning is also supported.
+
+the following events are generated
+  - 'wifi.add.iface': {"mac":"00:18:84:88:00:02","dbm":20,"iftype":"ap"}
+  - 'wifi.del.iface': {"mac":"00:18:84:88:00:02","dbm":20,"iftype":"ap"}
+  - 'wifi.new.station': {"mac":"00:18:84:88:00:03","interface":"wlan0"}
+  - 'wifi.del.station': {"mac":"00:18:84:88:00:03","interface":"wlan0","signal":200,
+			 "inactive":45670,"rx_pkt":500,"tx_pkt":157,
+			 "rx_rate":{"bitrate":1000,"mhz":20},
+			 "tx_rate":{"bitrate":19500,"ht":true,"mcs":true,"mhz":20},
+			 "rx_bytes":36709,"tx_bytes":25033,"tx_retries":76,"tx_failed":20}
+  - 'wifi.status.station': {"mac":"00:18:84:88:00:03","interface":"wlan0","signal":202,
+			    "inactive":750,"rx_pkt":161,"tx_pkt":59,
+			    "rx_rate":{"bitrate":1000,"mhz":20},
+			    "tx_rate":{"bitrate":21700,"ht":true,"mcs":true,"mhz":20,"short_gi":true},
+			    "rx_bytes":14413,"tx_bytes":9352,"tx_retries":39,"tx_failed":7}
+  - 'wifi.high.rssi': {"mac":"00:18:84:88:00:03","rssi":202}
+  - 'wifi.low.rssi': {"mac":"00:18:84:88:00:03","rssi":50}
+  - 'wifi.high.tx_rate': {"mac":"00:18:84:88:00:03","tx_rate":1440000}
+  - 'wifi.low.tx_rate': {"mac":"00:18:84:88:00:03","tx_rate":21700}
+  - 'wifi.rps': {"mac":"00:18:84:88:00:03","tx_retries":46}
+  - 'wifi.scan.done': {"ifname":"wlan0"}
