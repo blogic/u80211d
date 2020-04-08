@@ -13,7 +13,9 @@
 
 #include "u80211d.h"
 
+#include <libubox/avl-cmp.h>
 #include <net/if.h>
+#include <syslog.h>
 
 static char *rssi_string[] = {
 	"wifi.normal.rssi",
@@ -61,7 +63,7 @@ static int avl_addrcmp(const void *k1, const void *k2, void *ptr)
 	return memcmp(k1, k2, 6);
 }
 
-struct avl_tree wif_tree = AVL_TREE_INIT(wif_tree, avl_addrcmp, false, NULL);
+struct avl_tree wif_tree = AVL_TREE_INIT(wif_tree, avl_strcmp, false, NULL);
 struct avl_tree sta_tree = AVL_TREE_INIT(sta_tree, avl_addrcmp, false, NULL);
 
 int nl80211_get_survey(char *ifname)
@@ -199,6 +201,21 @@ static void nl80211_to_blob(struct nlattr **tb, char *ifname)
 
 	if (tb[NL80211_ATTR_WIPHY_FREQ])
 		blobmsg_add_u32(&b, "frequency", nla_get_u32(tb[NL80211_ATTR_WIPHY_FREQ]));
+
+	if (tb[NL80211_ATTR_CENTER_FREQ1])
+		blobmsg_add_u32(&b, "center_freq1", nla_get_u32(tb[NL80211_ATTR_CENTER_FREQ1]));
+
+	if (tb[NL80211_ATTR_CENTER_FREQ2])
+		blobmsg_add_u32(&b, "center_freq2", nla_get_u32(tb[NL80211_ATTR_CENTER_FREQ2]));
+
+	if (tb[NL80211_ATTR_CHANNEL_WIDTH])
+		blobmsg_add_u32(&b, "channel_width", nla_get_u32(tb[NL80211_ATTR_CHANNEL_WIDTH]));
+
+	if (tb[NL80211_ATTR_WIPHY_CHANNEL_TYPE])
+		blobmsg_add_u32(&b, "channel_type", nla_get_u32(tb[NL80211_ATTR_WIPHY_CHANNEL_TYPE]));
+
+	if (tb[NL80211_ATTR_WIPHY])
+		blobmsg_add_u32(&b, "phy", nla_get_u32(tb[NL80211_ATTR_WIPHY]));
 
 	if (tb[NL80211_ATTR_STA_INFO] != NULL &&
 	    !nla_parse_nested(sinfo, NL80211_STA_INFO_MAX,
@@ -455,25 +472,48 @@ static void nl80211_add_iface(struct nlattr **tb)
 	addr = nla_data(tb[NL80211_ATTR_MAC]);
 	ifname = nla_get_string(tb[NL80211_ATTR_IFNAME]);
 
-	wif = avl_find_element(&wif_tree, addr, wif, avl);
-	if (wif)
-		return;
+	wif = avl_find_element(&wif_tree, ifname, wif, avl);
+	if (!wif) {
+		wif = malloc(sizeof(*wif));
+		if (!wif)
+			return;
 
-	wif = malloc(sizeof(*wif));
-	if (!wif)
-		return;
-
-	memset(wif, 0, sizeof(*wif));
+		memset(wif, 0, sizeof(*wif));
+		memcpy(wif->ifname, ifname, IF_NAMESIZE);
+		wif->avl.key = wif->ifname;
+		wif->idx = if_nametoindex(wif->ifname);
+		wif->assoc.cb = nl80211_assoc_list;
+		nl80211_assoc_list(&wif->assoc);
+		avl_insert(&wif_tree, &wif->avl);
+		nl80211_notify(tb, "wifi.new.iface");
+		wif->info = NULL;
+		if (!strncmp(wif->ifname, "scan", 4))
+			iface_up(wif->ifname);
+	} else
+		nl80211_to_blob(tb, NULL);
 	memcpy(wif->addr, addr, 6);
-	wif->avl.key = wif->addr;
-	memcpy(wif->ifname, ifname, IF_NAMESIZE);
-	wif->idx = if_nametoindex(wif->ifname);
-	wif->assoc.cb = nl80211_assoc_list;
-	nl80211_assoc_list(&wif->assoc);
-	avl_insert(&wif_tree, &wif->avl);
-	nl80211_notify(tb, "wifi.new.iface");
+	if (wif->info)
+		free(wif->info);
 	wif->info = malloc(blob_pad_len(b.head));
 	memcpy(wif->info, b.head, blob_pad_len(b.head));
+
+	if (tb[NL80211_ATTR_WIPHY])
+		wif->phy = nla_get_u32(tb[NL80211_ATTR_WIPHY]);
+
+	if (tb[NL80211_ATTR_WIPHY_FREQ])
+		wif->freq = nla_get_u32(tb[NL80211_ATTR_WIPHY_FREQ]);
+
+	if (tb[NL80211_ATTR_CENTER_FREQ1])
+		wif->chan_freq1 = nla_get_u32(tb[NL80211_ATTR_CENTER_FREQ1]);
+
+	if (tb[NL80211_ATTR_CENTER_FREQ2])
+		wif->chan_freq2 = nla_get_u32(tb[NL80211_ATTR_CENTER_FREQ2]);
+
+	if (tb[NL80211_ATTR_CHANNEL_WIDTH])
+		wif->chan_width = nla_get_u32(tb[NL80211_ATTR_CHANNEL_WIDTH]);
+
+	if (tb[NL80211_ATTR_WIPHY_CHANNEL_TYPE])
+		wif->chan_type = nla_get_u32(tb[NL80211_ATTR_WIPHY_CHANNEL_TYPE]);
 }
 
 static void _nl8011_del_iface(struct wifi_iface *wif)
@@ -490,13 +530,13 @@ static void _nl8011_del_iface(struct wifi_iface *wif)
 static void nl80211_del_iface(struct nlattr **tb)
 {
 	struct wifi_iface *wif;
-	uint8_t *addr;
+	char *ifname;
 
-	if (tb[NL80211_ATTR_MAC] == NULL)
+	if (tb[NL80211_ATTR_IFNAME] == NULL)
 		return;
 
-	addr = nla_data(tb[NL80211_ATTR_MAC]);
-	wif = avl_find_element(&wif_tree, addr, wif, avl);
+	ifname = nla_get_string(tb[NL80211_ATTR_IFNAME]);
+	wif = avl_find_element(&wif_tree, ifname, wif, avl);
 	if (!wif)
 		return;
 	nl80211_notify(tb, "wifi.del.iface");
@@ -711,6 +751,7 @@ out:
 static void nl80211_enum_tout(struct uloop_timeout *t)
 {
 	nl80211_list_wif();
+	uloop_timeout_set(&nl80211_enum_timer, 2 * 1000);
 }
 
 int nl80211_init(void)

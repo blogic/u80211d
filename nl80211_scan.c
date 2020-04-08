@@ -32,7 +32,7 @@ static int nl80211_freq2channel(int freq)
 		return (freq - 5000) / 5;
 }
 
-int nl80211_trigger_scan(struct wifi_iface *wif)
+int nl80211_trigger_scan(struct wifi_iface *wif, int on_channel)
 {
 	struct nl_msg *msg;
 
@@ -49,6 +49,19 @@ int nl80211_trigger_scan(struct wifi_iface *wif)
 
 	if (nla_put_u32(msg, NL80211_ATTR_IFINDEX, wif->idx))
 		goto out;
+
+	if (on_channel) {
+		if (wif->freq)
+			nla_put_u32(msg, NL80211_ATTR_WIPHY_FREQ, wif->freq);
+		if (wif->chan_freq1)
+			nla_put_u32(msg, NL80211_ATTR_CENTER_FREQ1, wif->chan_freq1);
+		if (wif->chan_freq1)
+			nla_put_u32(msg, NL80211_ATTR_CENTER_FREQ2, wif->chan_freq2);
+		if (wif->chan_width)
+			nla_put_u32(msg, NL80211_ATTR_CHANNEL_WIDTH, wif->chan_width);
+		if (wif->chan_type)
+			nla_put_u32(msg, NL80211_ATTR_WIPHY_CHANNEL_TYPE, wif->chan_type);
+	}
 
 	return genl_send_and_recv(&nl80211_status, msg);
 out:
@@ -404,10 +417,10 @@ static void nl80211_scan_tout(struct uloop_timeout *t)
 	struct wifi_iface *wif;
 
 	wif = find_wif("scan");
-	if (!wif)
-		return;
-	if (!wif->scanning && !wif->cac)
-		nl80211_trigger_scan(wif);
+	if (wif) {
+		if (!wif->scanning && !wif->cac)
+			nl80211_trigger_scan(wif, 0);
+	}
 	uloop_timeout_set(&nl80211_scan_timer, config.scan_period * 1000);
 }
 

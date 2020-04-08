@@ -130,6 +130,12 @@ struct wifi_iface {
 	int scanning;
 	int cac;
 	struct blob_attr *scan_result;
+	uint32_t phy;
+	uint32_t freq;
+	uint32_t chan_freq1;
+	uint32_t chan_freq2;
+	uint32_t chan_width;
+	uint32_t chan_type;
 };
 
 struct wifi_station {
@@ -172,7 +178,7 @@ extern int nl80211_init(void);
 extern void nl80211_deinit(void);
 extern int nl80211_init_scan(void);
 extern void nl80211_deinit_scan(void);
-extern int nl80211_trigger_scan(struct wifi_iface *wif);
+extern int nl80211_trigger_scan(struct wifi_iface *wif, int on_channel);
 extern int nl80211_trigger_cac(struct wifi_iface *wif, int channel, int width);
 extern void nl80211_handle_new_scan_result(struct nlattr **tb, int iface);
 extern void nl80211_handle_trigger_scan(int iface, int start);

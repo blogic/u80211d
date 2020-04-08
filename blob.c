@@ -20,6 +20,7 @@ static char *iftype_string[NUM_NL80211_IFTYPES] = {
 	[NL80211_IFTYPE_AP] = "ap",
 	[NL80211_IFTYPE_MONITOR] = "monitor",
 	[NL80211_IFTYPE_ADHOC] = "adhoc",
+	[NL80211_IFTYPE_MESH_POINT] = "mesh",
 };
 
 void blobmsg_add_iface(struct blob_buf *bbuf, char *name, int index)
