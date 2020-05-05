@@ -130,7 +130,7 @@ int nl80211_trigger_cac(struct wifi_iface *wif, int channel, int width)
 	if (nla_put_u32(msg, NL80211_ATTR_WIPHY_FREQ, dfs->freq))
 		goto out;
 
-	if (nla_put_u32(msg, NL80211_ATTR_CHANNEL_WIDTH, chwidth[width] ^ 2 * 10))
+	if (nla_put_u32(msg, NL80211_ATTR_CHANNEL_WIDTH, chwidth[width]))
 		goto out;
 
 	if (nla_put_u32(msg, NL80211_ATTR_CENTER_FREQ1, dfs->center_freq[width]))
