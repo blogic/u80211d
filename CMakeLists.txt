@@ -7,7 +7,7 @@ ADD_DEFINITIONS(-Os -ggdb -Wall -Werror --std=gnu99 -Wmissing-declarations)
 SET(CMAKE_SHARED_LIBRARY_LINK_C_FLAGS "")
 SET(LIBS ubox ubus json-c blobmsg_json)
 
-ADD_EXECUTABLE(u80211d u80211d.c ubus.c nl80211.c nl80211_scan.c nl80211_dfs.c netlink.c config.c blob.c iface.c)
+ADD_EXECUTABLE(u80211d u80211d.c ubus.c nl80211.c nl80211_scan.c netlink.c config.c blob.c iface.c)
 TARGET_LINK_LIBRARIES(u80211d ${LIBS} nl-tiny uci)
 INSTALL(TARGETS u80211d
 	RUNTIME DESTINATION ${CMAKE_INSTALL_SBINDIR}

@@ -645,9 +645,6 @@ static int cb_nl80211_status(struct nl_msg *msg, void *arg)
 	case NL80211_CMD_SCAN_ABORTED:
 		nl80211_handle_trigger_scan(ifidx, 0);
 		break;
-	case NL80211_CMD_RADAR_DETECT:
-		nl80211_handle_radar_event(tb, ifidx);
-		break;
 	case NL80211_CMD_GET_REG:
 		nl80211_to_blob(tb, NULL);
 		break;

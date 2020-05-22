@@ -34,8 +34,6 @@ enum {
 	GLOBAL_ATTR_SCAN_PHY,
 	GLOBAL_ATTR_SCAN_PERIOD,
 	GLOBAL_ATTR_COUNTRY,
-	GLOBAL_ATTR_CAC_PERIOD,
-	GLOBAL_ATTR_CAC_ON_START,
 	__GLOBAL_ATTR_MAX,
 };
 
@@ -50,8 +48,6 @@ static const struct blobmsg_policy global_attrs[__GLOBAL_ATTR_MAX] = {
 	[GLOBAL_ATTR_SCAN_PHY] = { .name = "scan_phy", .type = BLOBMSG_TYPE_INT32 },
 	[GLOBAL_ATTR_SCAN_PERIOD] = { .name = "scan_period", .type = BLOBMSG_TYPE_INT32 },
 	[GLOBAL_ATTR_COUNTRY] = { .name = "country", .type = BLOBMSG_TYPE_STRING },
-	[GLOBAL_ATTR_CAC_PERIOD] = { .name = "cac_period", .type = BLOBMSG_TYPE_INT32 },
-	[GLOBAL_ATTR_CAC_ON_START] = { .name = "cac_on_start", .type = BLOBMSG_TYPE_INT32 },
 };
 
 const struct uci_blob_param_list global_attr_list = {
@@ -96,12 +92,6 @@ static int config_load_global(struct uci_section *s)
 
 	if (tb[GLOBAL_ATTR_COUNTRY])
 		config.country = blobmsg_get_string(tb[GLOBAL_ATTR_COUNTRY]);
-
-	if (tb[GLOBAL_ATTR_CAC_PERIOD])
-		config.cac_period = blobmsg_get_u32(tb[GLOBAL_ATTR_CAC_PERIOD]);
-
-	if (tb[GLOBAL_ATTR_CAC_ON_START])
-		config.cac_on_start = blobmsg_get_u32(tb[GLOBAL_ATTR_CAC_ON_START]);
 
 	return 0;
 }

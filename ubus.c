@@ -79,14 +79,12 @@ static int wif_busy(struct ubus_context *ctx,
 		    struct ubus_request_data *req,
 		    struct wifi_iface *wif)
 {
-	if (!wif->scanning && !wif->cac)
+	if (!wif->scanning)
 		return 0;
 
 	blob_buf_init(&b, 0);
 	if (wif->scanning)
 		blobmsg_add_u8(&b, "scanning", true);
-	if (wif->cac)
-		blobmsg_add_u8(&b, "cac", true);
 	ubus_send_reply(ctx, req, b.head);
 
 	return 1;
@@ -202,63 +200,6 @@ static int scan_cb(struct ubus_context *ctx,
 }
 
 enum {
-	CAC_IFNAME,
-	CAC_CHANNEL,
-	CAC_WIDTH,
-	__CAC_MAX,
-};
-
-static const struct blobmsg_policy cac_policy[__CAC_MAX] = {
-	[CAC_IFNAME] = { .name = "ifname", .type = BLOBMSG_TYPE_STRING },
-	[CAC_CHANNEL] = { .name = "channel", .type = BLOBMSG_TYPE_INT32 },
-	[CAC_WIDTH] = { .name = "width", .type = BLOBMSG_TYPE_INT32 },
-};
-
-static int cac_cb(struct ubus_context *ctx,
-		  struct ubus_object *obj,
-		  struct ubus_request_data *req,
-		  const char *method, struct blob_attr *msg)
-{
-	struct blob_attr *tb[__CAC_MAX];
-	struct wifi_iface *wif;
-	char *ifname;
-	int width = 80;
-
-	if (!msg)
-		return UBUS_STATUS_INVALID_ARGUMENT;
-
-	blobmsg_parse(cac_policy, __CAC_MAX, tb, blob_data(msg), blob_len(msg));
-	if (!tb[CAC_IFNAME] || !tb[CAC_CHANNEL])
-		return UBUS_STATUS_INVALID_ARGUMENT;
-	ifname = blobmsg_get_string(tb[CAC_IFNAME]);
-	wif = find_wif(ifname);
-	if (!wif)
-		return UBUS_STATUS_INVALID_ARGUMENT;
-
-	if (tb[CAC_WIDTH])
-		width = blobmsg_get_u32(tb[CAC_WIDTH]);
-	switch (width) {
-	case 20:
-		width = 0;
-		break;
-	case 40:
-		width = 1;
-		break;
-	case 80:
-		width = 2;
-		break;
-	default:
-		return UBUS_STATUS_INVALID_ARGUMENT;
-	}
-
-	if (!wif_busy(ctx, req, wif))
-		if (nl80211_trigger_cac(wif, blobmsg_get_u32(tb[CAC_CHANNEL]), width))
-			return UBUS_STATUS_INVALID_ARGUMENT;
-
-	return UBUS_STATUS_OK;
-}
-
-enum {
 	ASSOC_IFNAME,
 	__ASSOC_MAX,
 };
@@ -330,7 +271,6 @@ static int reg_cb(struct ubus_context *ctx,
 static const struct ubus_method wifi_methods[] = {
         UBUS_METHOD("assoclist", assoclist_cb, assoc_policy),
         UBUS_METHOD("scan", scan_cb, scan_policy),
-        UBUS_METHOD("cac", cac_cb, cac_policy),
         UBUS_METHOD("reg", reg_cb, reg_policy),
         UBUS_METHOD("iface", iface_cb, iface_policy),
         UBUS_METHOD("survey", survey_cb, survey_policy),

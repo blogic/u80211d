@@ -417,10 +417,8 @@ static void nl80211_scan_tout(struct uloop_timeout *t)
 	struct wifi_iface *wif;
 
 	wif = find_wif("scan");
-	if (wif) {
-		if (!wif->scanning && !wif->cac)
-			nl80211_trigger_scan(wif, 0);
-	}
+	if (wif && !wif->scanning)
+		nl80211_trigger_scan(wif, 0);
 	uloop_timeout_set(&nl80211_scan_timer, config.scan_period * 1000);
 }
 

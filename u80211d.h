@@ -109,8 +109,6 @@ struct config {
 	uint32_t station_poll;
 	uint32_t scan_phy;
 	uint32_t scan_period;
-	uint32_t cac_period;
-	uint32_t cac_on_start;
 	char *country;
 };
 
@@ -128,7 +126,6 @@ struct wifi_iface {
 	struct uloop_timeout assoc;
 	struct blob_attr *info;
 	int scanning;
-	int cac;
 	struct blob_attr *scan_result;
 	uint32_t phy;
 	uint32_t freq;
@@ -179,10 +176,8 @@ extern void nl80211_deinit(void);
 extern int nl80211_init_scan(void);
 extern void nl80211_deinit_scan(void);
 extern int nl80211_trigger_scan(struct wifi_iface *wif, int on_channel);
-extern int nl80211_trigger_cac(struct wifi_iface *wif, int channel, int width);
 extern void nl80211_handle_new_scan_result(struct nlattr **tb, int iface);
 extern void nl80211_handle_trigger_scan(int iface, int start);
-extern void nl80211_handle_radar_event(struct nlattr **tb, int iface);
 extern int nl80211_reg_get(void);
 extern int nl80211_reg_set(char *alpha2);
 extern int nl80211_iface_add(int phy, char *ifname, uint32_t iftype);
