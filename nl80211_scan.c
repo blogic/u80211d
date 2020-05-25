@@ -433,7 +433,7 @@ int nl80211_init_scan(void)
 			return -1;
 		iface_up("scan");
 		nl80211_scan_timer.cb = nl80211_scan_tout;
-		uloop_timeout_set(&nl80211_scan_timer, config.scan_period * 1000);
+		uloop_timeout_set(&nl80211_scan_timer, (config.scan_delay ? config.scan_delay : config.scan_period) * 1000);
 	}
 
 	return 0;

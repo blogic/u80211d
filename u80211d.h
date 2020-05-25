@@ -109,6 +109,7 @@ struct config {
 	uint32_t station_poll;
 	uint32_t scan_phy;
 	uint32_t scan_period;
+	uint32_t scan_delay;
 	char *country;
 };
 
