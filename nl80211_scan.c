@@ -20,6 +20,23 @@ struct uloop_timeout nl80211_scan_timer;
 
 #define min(a,b) (((a) < (b)) ? (a) : (b))
 
+#define HT_CHANNELS_MAX 2
+#define VHT_CHANNELS_MAX 8
+#define HE_CHANNELS_MAX VHT_CHANNELS_MAX
+
+#define CHANNEL_WIDTH_STR_MAX 6
+
+#define HT_CHAN_WIDTH_MASK 0x04
+#define HT_SECONDARY_CHAN_OFFS_MASK 0x03
+
+#define VHT_OP_INFO_OCTET_OFFSET 2
+
+#define HE_OP_PARAMS_6GHZ_OP_INFO_MASK 0x02
+#define HE_OP_PARAMS_VHT_OP_INFO_MASK 0x04
+#define HE_6GHZ_OP_INFO_OCTET_OFFSET 9
+#define HE_VHT_OP_INFO_OCTET_OFFSET 9
+
+
 static int nl80211_freq2channel(int freq)
 {
 	if (freq == 2484)
@@ -40,6 +57,7 @@ int nl80211_trigger_scan(struct wifi_iface *wif, int on_channel)
 		return 0;
 
 	msg = nlmsg_alloc();
+
 	if (!msg)
 		return -ENOMEM;
 
@@ -274,14 +292,173 @@ static void iwinfo_parse_rsn(uint8_t *data, uint8_t len, char *defcipher, char *
 	}
 }
 
-static void nl80211_get_scanlist_ie(struct nlattr **bss)
+struct bss_mode_channels {
+	unsigned char ht[HT_CHANNELS_MAX];
+	unsigned char vht[VHT_CHANNELS_MAX];
+	unsigned char he[HE_CHANNELS_MAX];
+};
+
+struct bss_mode_widths {
+	char ht[CHANNEL_WIDTH_STR_MAX];
+	char vht[CHANNEL_WIDTH_STR_MAX];
+	char he[CHANNEL_WIDTH_STR_MAX];
+};
+
+struct bss_modes {
+	bool has_ht;
+	bool has_vht;
+	bool has_he;
+};
+
+struct bss_capabilities {
+	struct bss_mode_channels channels;
+	struct bss_mode_widths widths;
+	struct bss_modes modes;
+};
+
+static void determine_6ghz_he_mode_and_channel(unsigned char *ie, struct bss_capabilities *capabilities) {
+	if ((!ie) || (!capabilities))
+		return;
+
+	unsigned char primary_channel = ie[0];
+	unsigned char chan_width = ie[1];
+	unsigned char CCFS0 = ie[2];			/* Channel Center Frequency Segment 0 */
+	unsigned char CCFS1 = ie[3];			/* Channel Center Frequency Segment 1 */
+	unsigned char CCF_diff = abs(ie[3] - ie[2]);    /* CCFS1 - CCFS0 */
+
+	switch(chan_width) {
+	case 0:	/* 20 MHz */
+		snprintf(capabilities->widths.he, sizeof(capabilities->widths.he), "20");
+		capabilities->channels.he[0] = primary_channel;
+		break;
+
+	case 1:	/* 40 MHz */
+		snprintf(capabilities->widths.he, sizeof(capabilities->widths.he), "40");
+		capabilities->channels.he[0] = CCFS0 - 2;
+		capabilities->channels.he[1] = CCFS0 + 2;
+		break;
+
+	case 2: /* 80 MHz */
+		snprintf(capabilities->widths.he, sizeof(capabilities->widths.he), "80");
+		for (int idx = 0, base = -6; idx < (HE_CHANNELS_MAX / 2); ++idx, base += 4)
+			capabilities->channels.he[idx] = CCFS0 + base;
+
+		break;
+
+	case 3: /* 160 MHz or 80+80 MHz */
+		if ((CCFS1 > 0) && (CCF_diff = 8)) {    /* 160 MHz */
+			snprintf(capabilities->widths.he, sizeof(capabilities->widths.he), "160");
+			for (int idx = 0, base = -14; idx < HE_CHANNELS_MAX; ++idx, base += 4)
+				capabilities->channels.he[idx] = CCFS0 + base;
+		} else if ((CCFS1 > 0) && (CCF_diff > 16)) {    /* 80+80 MHz */
+			snprintf(capabilities->widths.he, sizeof(capabilities->widths.he), "80+80");
+			for (int idx = 0, base = -6; idx < (HE_CHANNELS_MAX / 2); ++idx, base += 4) {
+				capabilities->channels.he[idx] = CCFS0 + base;
+				capabilities->channels.he[idx+4] = CCFS1 + base;
+			}
+		}
+
+		break;
+
+	default:	/* 4 to 255 is reserved */
+		break;
+	}
+}
+
+static void __determine_vht_mode_channels(unsigned char *ie, unsigned char *dest_chans,
+		char *dest_width, struct bss_capabilities *capabilities)
 {
+	if ((!ie) || (!capabilities))
+		return;
+
+	unsigned char chan_width = ie[0];
+	unsigned char CCFS0 = ie[1];
+	unsigned char CCFS1 = ie[2];
+	unsigned CCF_diff = abs(ie[2] - ie[1]);
+
+	switch (chan_width) {
+	case 0:	/* 20 MHz or 40 MHz */
+		snprintf(dest_width, CHANNEL_WIDTH_STR_MAX, "%s",
+				(capabilities->channels.ht[0] && capabilities->channels.ht[1]) ? "40" : "20");
+		dest_chans[0] = capabilities->channels.ht[0];
+		dest_chans[1] = capabilities->channels.ht[1];
+		break;
+
+	case 1:	/* 80 MHz, 160 MHz, or 80+80 MHz */
+		/* The formula to determine VHT channel width found in the 802.11 spec:
+		*  Table 9-253 — BSS bandwidth when the VHT Operation Information field Channel Width sub-field is 1.
+		*/
+		if (CCFS1 == 0) {
+			snprintf(dest_width, CHANNEL_WIDTH_STR_MAX, "80");
+			for (int idx = 0, base = -6; idx < (VHT_CHANNELS_MAX / 2); ++idx, base += 4)
+				dest_chans[idx] = CCFS0 + base;
+		} else if ((CCFS1 > 0) && (CCF_diff == 8)) {
+			snprintf(dest_width, CHANNEL_WIDTH_STR_MAX, "160");
+			for (int idx = 0, base = -14; idx < VHT_CHANNELS_MAX; ++idx, base += 4)
+				dest_chans[idx] = CCFS0 + base;
+
+		} else if ((CCFS1 > 0) && (CCF_diff > 16)) {
+			snprintf(dest_width, CHANNEL_WIDTH_STR_MAX, "80+80");
+			for (int idx = 0, base = -6; idx < (VHT_CHANNELS_MAX / 2); ++idx, base += 4) {
+				dest_chans[idx] = CCFS0 + base;
+				dest_chans[idx+4] = CCFS1 + base;
+			}
+		}
+		break;
+
+	case 2:	/* 160 MHz (deprecated) */
+		snprintf(capabilities->widths.he, sizeof(capabilities->widths.he), "160");
+		for (int idx = 0, base = -14; idx < VHT_CHANNELS_MAX; ++idx, base += 4)
+			capabilities->channels.he[idx] = CCFS0 + base;
+		break;
+
+	case 3:	/* Non-contiguous 80+80 MHz (deprecated) */
+		snprintf(capabilities->widths.he, sizeof(capabilities->widths.he), "80+80");
+		for (int idx = 0, base = -6; idx < (VHT_CHANNELS_MAX / 2); ++idx, base += 4) {
+			capabilities->channels.he[idx] = CCFS0 + base;
+			capabilities->channels.he[idx+4] = CCFS1 + base;
+		}
+		break;
+
+	default:	/* 4 to 255 is reserved */
+		break;
+	}
+
+}
+
+static void determine_vht_mode_and_channels(unsigned char *ie, struct bss_capabilities *capabilities)
+{
+	unsigned char *vht_base = (unsigned char *) (ie + VHT_OP_INFO_OCTET_OFFSET);
+	char dest_width[CHANNEL_WIDTH_STR_MAX] = {0};
+
+	__determine_vht_mode_channels(vht_base, capabilities->channels.vht, dest_width, capabilities);
+
+	snprintf(capabilities->widths.vht, sizeof(capabilities->widths.vht), "%s", dest_width);
+}
+
+static void determine_he_mode_and_channels(unsigned char *ie, struct bss_capabilities *capabilities)
+{
+	unsigned char *he_base = (unsigned char *) (ie + HE_VHT_OP_INFO_OCTET_OFFSET);
+	char dest_width[CHANNEL_WIDTH_STR_MAX] = {0};
+
+	__determine_vht_mode_channels(he_base, capabilities->channels.he, dest_width, capabilities);
+
+	snprintf(capabilities->widths.ht, sizeof(capabilities->widths.he), "%s", dest_width);
+}
+
+
+static void nl80211_get_scanlist_ie(struct nlattr **bss, struct bss_capabilities *capabilities)
+{
+	if ((!bss) || (!capabilities))
+		return;
+
 	int ielen = nla_len(bss[NL80211_BSS_INFORMATION_ELEMENTS]);
 	unsigned char *ie = nla_data(bss[NL80211_BSS_INFORMATION_ELEMENTS]);
 	char ssid[ESSID_MAX_SIZE + 1] = { 0 };
 	void *c;
 	int len;
 
+	/* 802.11 BSS IE (information element) IDs defined in 802.11 section 9.4.2 in Table 9-77 "Element IDs" */
 	while (ielen >= 2 && ielen >= ie[1]) {
 		switch (ie[0]) {
 		case 0: /* SSID */
@@ -293,6 +470,7 @@ static void nl80211_get_scanlist_ie(struct nlattr **bss)
 				blobmsg_add_string(&s, "ssid", ssid);
 			}
 			break;
+
 		case 11: /* BSS Load */
 			c = blobmsg_open_table(&s, "bss_load");
 			blobmsg_add_u16(&s, "station_count", (ie[3] << 8) | ie[2]);
@@ -300,8 +478,75 @@ static void nl80211_get_scanlist_ie(struct nlattr **bss)
 			blobmsg_add_u16(&s, "admission_capacity", (ie[6] << 8) | ie[5]);
 			blobmsg_close_table(&s,  c);
 			break;
+
 		case 48: /* RSN */
 			iwinfo_parse_rsn(ie + 2, ie[1], "CCMP", "8021x");
+			break;
+
+		case 61: /* HT Operation */
+			capabilities->modes.has_ht = true;
+			capabilities->channels.ht[0] = ie[2];
+
+			if (ie[3] & HT_CHAN_WIDTH_MASK) { /* is HT40 */
+				switch (ie[3] & HT_SECONDARY_CHAN_OFFS_MASK) {
+				case 0:		/* no secondary channel */
+					snprintf(capabilities->widths.ht, sizeof(capabilities->widths.ht), "20");
+					break;
+				case 1:		/* secondary channel above */
+					snprintf(capabilities->widths.ht, sizeof(capabilities->widths.ht), "40+");
+					capabilities->channels.ht[1] = ie[2] + 4;
+					break;
+				case 3:		/* secondary channel below */
+					snprintf(capabilities->widths.ht, sizeof(capabilities->widths.ht), "40-");
+					capabilities->channels.ht[1] = ie[2] - 4;
+					break;
+				default:	/* 2 is reserved */
+					break;
+				}
+			} else {
+				snprintf(capabilities->widths.ht, sizeof(capabilities->widths.ht), "20");
+			}
+
+			break;
+
+		case 192: /* VHT Operation */
+			capabilities->modes.has_vht = true;
+			determine_vht_mode_and_channels(ie, capabilities);
+			break;
+
+		case 255: /* Max Element ID */
+			/* Check element ID Extension */
+			if (ie[2] != 36) /* Is not "HE Operation" element */
+				break;
+
+			/* HE Operates at channel widths of 20/40/80/80+80/160 MHz */
+			/* The channel width is determined by either the 6 GHz, VHT or HT width */
+			/* Reference 802.11 Section 9.4.243 "HE Operation Element" */
+			capabilities->modes.has_he = true;
+
+			if (ie[5] & HE_OP_PARAMS_6GHZ_OP_INFO_MASK) {
+				/* If this is a 6 GHz HE AP, the "6 GHz Operation Information" field shows channel width
+				 *
+				 * The "6 GHz Operation Information" field should start at octet 10 because
+				 * the "VHT Operation Information Present" and "Co-Hosted BSS" bits should never be set as
+				 * defined in 802.11 Section 26.17.2.1
+				 * Reference Figure 9-772h for element format */
+				determine_6ghz_he_mode_and_channel((unsigned char *) (ie + HE_6GHZ_OP_INFO_OCTET_OFFSET), capabilities);
+			} else if (capabilities->modes.has_vht) {    /* If we have VHT information already, reuse it */
+				snprintf(capabilities->widths.he, sizeof(capabilities->widths.he), "%s", capabilities->widths.vht);
+				for (int idx=0; idx < HE_CHANNELS_MAX; ++idx)
+					capabilities->channels.he[idx] = capabilities->channels.vht[idx];
+
+			} else if (ie[4] & HE_OP_PARAMS_VHT_OP_INFO_MASK) {
+				/* If this beacon did not include a VHT operation element, this beacon should have it embedded
+				 * inside the HE operation element, unless this is 2.4 GHz HE AP */
+				determine_he_mode_and_channels(ie, capabilities);
+			} else if (capabilities->modes.has_ht) {	  /* If there is no VHT information, use HT information */
+				snprintf(capabilities->widths.he, sizeof(capabilities->widths.he), "%s", capabilities->widths.ht);
+				capabilities->channels.he[0] = capabilities->channels.ht[0];
+				capabilities->channels.he[1] = capabilities->channels.ht[1];
+			}
+
 			break;
 		}
 
@@ -326,6 +571,77 @@ static void mac_addr_n2a(char *mac_addr, const unsigned char *arg)
 	}
 }
 
+static void add_bss_capabilites_report(struct bss_capabilities *capabilities, int frequency)
+{
+	if (!capabilities)
+		return;
+
+	if (capabilities->modes.has_ht) {
+		blobmsg_add_string(&s, "ht", capabilities->widths.ht);
+		void *ht_cookie = blobmsg_open_array(&s, "ht_channels");
+
+		if (ht_cookie) {
+			blobmsg_add_u32(&s, "ht_channel", (unsigned int) capabilities->channels.ht[0]);
+
+			if (capabilities->channels.ht[1])
+				blobmsg_add_u32(&s, "ht_channel", (unsigned int) capabilities->channels.ht[1]);
+		}
+
+		blobmsg_close_array(&s, ht_cookie);
+		ht_cookie = NULL;
+	}
+
+	if (capabilities->modes.has_vht) {
+		blobmsg_add_string(&s, "vht", capabilities->widths.vht);
+		void *vht_cookie = blobmsg_open_array(&s, "vht_channels");
+
+		if (vht_cookie) {
+			for (int idx = 0; ((idx < VHT_CHANNELS_MAX) && capabilities->channels.vht[idx]); ++idx) {
+				blobmsg_add_u32(&s, "vht_channel", (unsigned int) capabilities->channels.vht[idx]);
+			}
+		}
+
+		blobmsg_close_array(&s, vht_cookie);
+		vht_cookie = NULL;
+	}
+
+	if (capabilities->modes.has_he) {
+		blobmsg_add_string(&s, "he", capabilities->widths.he);
+		void *he_cookie = blobmsg_open_array(&s, "he_channels");
+
+		if (he_cookie) {
+			for (int idx = 0; ((idx < HE_CHANNELS_MAX) && capabilities->channels.he[idx]); ++idx) {
+				blobmsg_add_u32(&s, "he_channel", (unsigned int) capabilities->channels.he[idx]);
+			}
+		}
+
+		blobmsg_close_array(&s, he_cookie);
+		he_cookie = NULL;
+	}
+
+}
+
+static void add_bss_supported_modes_report(struct bss_capabilities *capabilities, int frequency)
+{
+	if (!capabilities)
+		return;
+
+	char wifi_mode_str[24] = {0};
+
+	if (frequency == 2) {
+		int ret = snprintf(wifi_mode_str, sizeof(wifi_mode_str) - 1, "11b/g/%s%s", (capabilities->modes.has_ht) ? "n/" : "",
+				(capabilities->modes.has_he) ? "ax/" : "");
+		wifi_mode_str[ret-1] = '\0';	/* drop the trailing / from the string */
+		blobmsg_add_string(&s, "wifi_modes", wifi_mode_str);
+	} else if ((frequency == 5) || (frequency == 6)) {
+		int ret = snprintf(wifi_mode_str, sizeof(wifi_mode_str) - 1, "11%s%s%s", (capabilities->modes.has_ht) ? "n/" : "a/",
+				(capabilities->modes.has_vht) ? "ac/" : "", (capabilities->modes.has_he) ? "ax/" : "");
+		wifi_mode_str[ret-1] = '\0';	/* drop the trailing / from the string */
+		blobmsg_add_string(&s, "wifi_modes", wifi_mode_str);
+	}
+
+}
+
 static int cb_nl80211_scan(struct nl_msg *msg, void *arg)
 {
 	int32_t rssi;
@@ -344,6 +660,9 @@ static int cb_nl80211_scan(struct nl_msg *msg, void *arg)
 		[NL80211_BSS_SEEN_MS_AGO]          = { .type = NLA_U32 },
 		[NL80211_BSS_BEACON_IES]           = { 0 },
 	};
+
+	struct bss_capabilities capabilities = {0};
+
 	struct genlmsghdr *gnlh = nlmsg_data(nlmsg_hdr(msg));
 	struct nlattr *tb[NL80211_ATTR_MAX + 1];
 	void *c;
@@ -381,13 +700,28 @@ static int cb_nl80211_scan(struct nl_msg *msg, void *arg)
 	if (caps & (1<<4))
 		blobmsg_add_u16(&s, "crypto", 1);
 
-	if (bss[NL80211_BSS_FREQUENCY])
+
+	if (bss[NL80211_BSS_FREQUENCY]) {
 		blobmsg_add_u32(&s, "channel",
 			nl80211_freq2channel(nla_get_u32(
 					bss[NL80211_BSS_FREQUENCY])));
+	}
 
 	if (bss[NL80211_BSS_INFORMATION_ELEMENTS])
-		nl80211_get_scanlist_ie(bss);
+		nl80211_get_scanlist_ie(bss, &capabilities);
+
+	if (bss[NL80211_BSS_FREQUENCY] && bss[NL80211_BSS_INFORMATION_ELEMENTS]) {
+		int frequency = nla_get_u32(bss[NL80211_BSS_FREQUENCY]) >> 10;
+		add_bss_capabilites_report(&capabilities, frequency);
+		add_bss_supported_modes_report(&capabilities, frequency);
+
+		if (frequency >= 2) {
+			char band_str[8] = {0};
+
+			snprintf(band_str, sizeof(band_str), "%sGHz", (frequency == 2) ? "2.4" : ((frequency == 5) ? "5" : "6"));
+			blobmsg_add_string(&s, "band", band_str);
+		}
+	}
 
 	if (bss[NL80211_BSS_SIGNAL_MBM]) {
 		int signal = ((int32_t)nla_get_u32(bss[NL80211_BSS_SIGNAL_MBM]) / 100);
@@ -428,7 +762,7 @@ int nl80211_init_scan(void)
 		return -1;
 
 	if (config.scan_period) {
-		int ret = nl80211_iface_add(config.scan_phy, "scan", NL80211_IFTYPE_AP);
+		int ret = nl80211_iface_add(config.scan_phy, "scan", NL80211_IFTYPE_STATION);
 		if (ret)
 			return -1;
 		iface_up("scan");

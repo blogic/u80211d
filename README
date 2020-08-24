@@ -65,6 +65,13 @@ scan - trigger a site survey. once complete a notification will be broadcast.
 			"channel_utilization": true,
 			"admission_capacity": 0
 		},
+		"ht": "40+",
+		"ht_channels": [
+			6,
+			10
+		],
+		"wifi_modes": "11b/g/n",
+		"band": "2.4GHz",
 		"wpa_version": 2,
 		"auth_suites": "psk",
 		"quality": 33,
