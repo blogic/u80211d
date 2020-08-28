@@ -32,6 +32,7 @@ enum {
 	GLOBAL_ATTR_STATION_STATUS,
 	GLOBAL_ATTR_STATION_POLL,
 	GLOBAL_ATTR_SCAN_PHY,
+	GLOBAL_ATTR_SCAN_IFACE,
 	GLOBAL_ATTR_SCAN_PERIOD,
 	GLOBAL_ATTR_SCAN_DELAY,
 	GLOBAL_ATTR_SCAN_AP_FORCE,
@@ -48,6 +49,7 @@ static const struct blobmsg_policy global_attrs[__GLOBAL_ATTR_MAX] = {
 	[GLOBAL_ATTR_STATION_STATUS] = { .name = "station_status", .type = BLOBMSG_TYPE_INT32 },
 	[GLOBAL_ATTR_STATION_POLL] = { .name = "station_poll", .type = BLOBMSG_TYPE_INT32 },
 	[GLOBAL_ATTR_SCAN_PHY] = { .name = "scan_phy", .type = BLOBMSG_TYPE_INT32 },
+	[GLOBAL_ATTR_SCAN_IFACE] = { .name = "scan_iface", .type = BLOBMSG_TYPE_STRING },
 	[GLOBAL_ATTR_SCAN_PERIOD] = { .name = "scan_period", .type = BLOBMSG_TYPE_INT32 },
 	[GLOBAL_ATTR_SCAN_DELAY] = { .name = "scan_delay", .type = BLOBMSG_TYPE_INT32 },
 	[GLOBAL_ATTR_SCAN_AP_FORCE] = { .name = "scan_ap_force", .type = BLOBMSG_TYPE_BOOL },
@@ -90,6 +92,9 @@ static int config_load_global(struct uci_section *s)
 
 	if (tb[GLOBAL_ATTR_SCAN_PHY])
 		config.scan_phy = blobmsg_get_u32(tb[GLOBAL_ATTR_SCAN_PHY]);
+
+	if (tb[GLOBAL_ATTR_SCAN_IFACE])
+		snprintf(config.scan_iface, sizeof(config.scan_iface), "%s", blobmsg_get_string(tb[GLOBAL_ATTR_SCAN_IFACE]));
 
 	if (tb[GLOBAL_ATTR_SCAN_PERIOD])
 		config.scan_period = blobmsg_get_u32(tb[GLOBAL_ATTR_SCAN_PERIOD]);

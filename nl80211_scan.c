@@ -752,7 +752,7 @@ static void nl80211_scan_tout(struct uloop_timeout *t)
 {
 	struct wifi_iface *wif;
 
-	wif = find_wif("scan");
+	wif = config.scan_iface[0] ? find_wif(config.scan_iface) : find_wif("scan");
 	if (wif && !wif->scanning) {
 		int scan_flags = 0;
 
@@ -770,10 +770,14 @@ int nl80211_init_scan(void)
 		return -1;
 
 	if (config.scan_period) {
-		int ret = nl80211_iface_add(config.scan_phy, "scan", NL80211_IFTYPE_STATION);
-		if (ret)
-			return -1;
-		iface_up("scan");
+		if (!config.scan_iface[0]) {
+			int ret = nl80211_iface_add(config.scan_phy, "scan", NL80211_IFTYPE_STATION);
+			if (ret)
+				return -1;
+
+			iface_up("scan");
+		}
+
 		nl80211_scan_timer.cb = nl80211_scan_tout;
 		uloop_timeout_set(&nl80211_scan_timer, (config.scan_delay ? config.scan_delay : config.scan_period) * 1000);
 	}
@@ -784,5 +788,7 @@ int nl80211_init_scan(void)
 void nl80211_deinit_scan(void)
 {
 	nl_socket_free(nl80211_scan.sock);
-	nl80211_iface_del("scan");
+
+	if (!config.scan_iface[0])
+		nl80211_iface_del("scan");
 }

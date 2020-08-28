@@ -102,3 +102,16 @@ the following events are generated
   - 'wifi.low.tx_rate': {"mac":"00:18:84:88:00:03","tx_rate":21700}
   - 'wifi.rps': {"mac":"00:18:84:88:00:03","tx_retries":46}
   - 'wifi.scan.done': {"ifname":"wlan0"}
+
+Automatic periodic scanning - to setup automatic periodic scanning set you need to specify:
+  - The PHY to bring up a scanning interface on or an interface that is already setup to use
+  - The time between scans in seconds.
+
+  Example Configuration:
+	u80211d.global.scan_phy=0 - Setup scanning interface on PHY 0
+	u80211d.global.scan_period=300 - Run a scan every 300 seconds (5 Minutes)
+
+  Example Configuration:
+	u80211d.global.scan_iface="wlan0" - Interface to scan on
+	u80211d.global.scan_period=300 - Run a scan every 300 seconds (5 Minutes)
+	u80211d.global.scan_ap_force=true - Run a scan even if the interface is an AP interface

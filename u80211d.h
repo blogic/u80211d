@@ -108,6 +108,7 @@ struct config {
 	uint32_t station_status;
 	uint32_t station_poll;
 	uint32_t scan_phy;
+	char scan_iface[IF_NAMESIZE];
 	uint32_t scan_period;
 	uint32_t scan_delay;
 	uint8_t scan_ap_force;
