@@ -5,7 +5,7 @@ a wifi introspection and scanning daemon for OpenWrt.
 the following ubus calls are provided:
 'wifi' @b95a57e0
 	"assoclist":{"ifname":"String"}
-	"scan":{"dump":"Boolean","ifname":"String"}
+	"scan":{"dump":"Boolean","ifname":"String","on_channel":"Boolean","ap_force":"Boolean"}
 	"cac":{"ifname":"String","channel":"Integer","width":"Integer"}
 	"reg":{"country":"String"}
 	"iface":{"phy":"Integer","sta":"Boolean","ap":"Boolean","mon":"Boolean","add":"String","delete":"String"}

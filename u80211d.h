@@ -110,6 +110,7 @@ struct config {
 	uint32_t scan_phy;
 	uint32_t scan_period;
 	uint32_t scan_delay;
+	uint8_t scan_ap_force;
 	char *country;
 };
 
@@ -176,7 +177,7 @@ extern int nl80211_init(void);
 extern void nl80211_deinit(void);
 extern int nl80211_init_scan(void);
 extern void nl80211_deinit_scan(void);
-extern int nl80211_trigger_scan(struct wifi_iface *wif, int on_channel);
+extern int nl80211_trigger_scan(struct wifi_iface *wif, int on_channel, int scan_flags);
 extern void nl80211_handle_new_scan_result(struct nlattr **tb, int iface);
 extern void nl80211_handle_trigger_scan(int iface, int start);
 extern int nl80211_reg_get(void);

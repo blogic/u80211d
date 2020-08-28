@@ -49,7 +49,7 @@ static int nl80211_freq2channel(int freq)
 		return (freq - 5000) / 5;
 }
 
-int nl80211_trigger_scan(struct wifi_iface *wif, int on_channel)
+int nl80211_trigger_scan(struct wifi_iface *wif, int on_channel, int scan_flags)
 {
 	struct nl_msg *msg;
 
@@ -80,6 +80,8 @@ int nl80211_trigger_scan(struct wifi_iface *wif, int on_channel)
 		if (wif->chan_type)
 			nla_put_u32(msg, NL80211_ATTR_WIPHY_CHANNEL_TYPE, wif->chan_type);
 	}
+
+	nla_put_u32(msg, NL80211_ATTR_SCAN_FLAGS, scan_flags);
 
 	return genl_send_and_recv(&nl80211_status, msg);
 out:
@@ -751,8 +753,14 @@ static void nl80211_scan_tout(struct uloop_timeout *t)
 	struct wifi_iface *wif;
 
 	wif = find_wif("scan");
-	if (wif && !wif->scanning)
-		nl80211_trigger_scan(wif, 0);
+	if (wif && !wif->scanning) {
+		int scan_flags = 0;
+
+		if (config.scan_ap_force)
+			scan_flags |= NL80211_SCAN_FLAG_AP;
+
+		nl80211_trigger_scan(wif, 0, scan_flags);
+	}
 	uloop_timeout_set(&nl80211_scan_timer, config.scan_period * 1000);
 }
 

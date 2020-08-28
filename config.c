@@ -34,6 +34,7 @@ enum {
 	GLOBAL_ATTR_SCAN_PHY,
 	GLOBAL_ATTR_SCAN_PERIOD,
 	GLOBAL_ATTR_SCAN_DELAY,
+	GLOBAL_ATTR_SCAN_AP_FORCE,
 	GLOBAL_ATTR_COUNTRY,
 	__GLOBAL_ATTR_MAX,
 };
@@ -49,6 +50,7 @@ static const struct blobmsg_policy global_attrs[__GLOBAL_ATTR_MAX] = {
 	[GLOBAL_ATTR_SCAN_PHY] = { .name = "scan_phy", .type = BLOBMSG_TYPE_INT32 },
 	[GLOBAL_ATTR_SCAN_PERIOD] = { .name = "scan_period", .type = BLOBMSG_TYPE_INT32 },
 	[GLOBAL_ATTR_SCAN_DELAY] = { .name = "scan_delay", .type = BLOBMSG_TYPE_INT32 },
+	[GLOBAL_ATTR_SCAN_AP_FORCE] = { .name = "scan_ap_force", .type = BLOBMSG_TYPE_BOOL },
 	[GLOBAL_ATTR_COUNTRY] = { .name = "country", .type = BLOBMSG_TYPE_STRING },
 };
 
@@ -94,6 +96,9 @@ static int config_load_global(struct uci_section *s)
 
 	if (tb[GLOBAL_ATTR_SCAN_DELAY])
 		config.scan_delay = blobmsg_get_u32(tb[GLOBAL_ATTR_SCAN_DELAY]);
+
+	if (tb[GLOBAL_ATTR_SCAN_AP_FORCE])
+		config.scan_ap_force = blobmsg_get_u8(tb[GLOBAL_ATTR_SCAN_AP_FORCE]);
 
 	if (tb[GLOBAL_ATTR_COUNTRY])
 		config.country = blobmsg_get_string(tb[GLOBAL_ATTR_COUNTRY]);
