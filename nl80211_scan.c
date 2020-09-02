@@ -244,6 +244,7 @@ static void iwinfo_parse_rsn(uint8_t *data, uint8_t len, char *defcipher, char *
 		if (!memcmp(data + 2 + (i * 4), ms_oui, 3) ||
 			!memcmp(data + 2 + (i * 4), ieee80211_oui, 3))
 		{
+			/* Table 9-133: AKM Suite Selectors - Suite Type */
 			switch (data[2 + (i * 4) + 3])
 			{
 				case 1:  /* IEEE 802.1x */
@@ -264,7 +265,7 @@ static void iwinfo_parse_rsn(uint8_t *data, uint8_t len, char *defcipher, char *
 					break;
 
 				case 8:  /* SAE */
-					blobmsg_add_u16(&s, "wpa_version", 4);
+					blobmsg_add_u16(&s, "wpa_version", 3);
 					blobmsg_add_string(&s, "auth_suites", "sae");
 					break;
 
@@ -274,7 +275,7 @@ static void iwinfo_parse_rsn(uint8_t *data, uint8_t len, char *defcipher, char *
 
 				case 11: /* 802.1x Suite-B */
 				case 12: /* 802.1x Suite-B-192 */
-					blobmsg_add_u16(&s, "wpa_version", 4);
+					blobmsg_add_u16(&s, "wpa_version", 3);
 					blobmsg_add_string(&s, "auth_suites", "8021x");
 					break;
 
@@ -286,7 +287,7 @@ static void iwinfo_parse_rsn(uint8_t *data, uint8_t len, char *defcipher, char *
 					break;
 
 				case 18: /* OWE */
-					blobmsg_add_u16(&s, "wpa_version", 4);
+					blobmsg_add_u16(&s, "wpa_version", 3);
 					blobmsg_add_string(&s, "auth_suites", "owe");
 					break;
 			}
