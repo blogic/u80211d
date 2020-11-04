@@ -153,6 +153,7 @@ enum {
 	SCAN_DUMP,
 	SCAN_IFNAME,
 	SCAN_ON_CHANNEL,
+	SCAN_AP_FORCE,
 	__SCAN_MAX,
 };
 
@@ -160,6 +161,7 @@ static const struct blobmsg_policy scan_policy[__SCAN_MAX] = {
 	[SCAN_IFNAME] = { .name = "ifname", .type = BLOBMSG_TYPE_STRING },
 	[SCAN_DUMP] = { .name = "dump", .type = BLOBMSG_TYPE_BOOL },
 	[SCAN_ON_CHANNEL] = { .name = "on_channel", .type = BLOBMSG_TYPE_BOOL },
+	[SCAN_AP_FORCE] = { .name = "ap_force", .type = BLOBMSG_TYPE_BOOL },
 };
 
 static int scan_cb(struct ubus_context *ctx,
@@ -170,7 +172,8 @@ static int scan_cb(struct ubus_context *ctx,
 	struct blob_attr *tb[__SCAN_MAX];
 	struct wifi_iface *wif;
 	char *ifname;
-	int dump = 0, on_channel = 0;;
+	int dump = 0, on_channel = 0;
+	int scan_flags = 0;
 
 	if (!msg)
 		return UBUS_STATUS_INVALID_ARGUMENT;
@@ -186,15 +189,20 @@ static int scan_cb(struct ubus_context *ctx,
 
 	if (tb[SCAN_DUMP])
 		dump = blobmsg_get_bool(tb[SCAN_DUMP]);
+
 	if (tb[SCAN_ON_CHANNEL])
 		on_channel = blobmsg_get_bool(tb[SCAN_ON_CHANNEL]);
+
+	if (tb[SCAN_AP_FORCE])
+		scan_flags |= (blobmsg_get_bool(tb[SCAN_AP_FORCE]) ? NL80211_SCAN_FLAG_AP : (config.scan_ap_force ? NL80211_SCAN_FLAG_AP : 0));
+
 	if (dump) {
 		blob_buf_init(&b, 0);
 		if (wif->scan_result)
 			blobmsg_add_field(&b, BLOBMSG_TYPE_TABLE, wif->ifname, blobmsg_data(wif->scan_result), blobmsg_data_len(wif->scan_result));
 		ubus_send_reply(ctx, req, b.head);
 	} else if (!wif_busy(ctx, req, wif))
-		nl80211_trigger_scan(wif, on_channel);
+		nl80211_trigger_scan(wif, on_channel, scan_flags);
 
 	return UBUS_STATUS_OK;
 }

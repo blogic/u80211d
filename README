@@ -5,7 +5,7 @@ a wifi introspection and scanning daemon for OpenWrt.
 the following ubus calls are provided:
 'wifi' @b95a57e0
 	"assoclist":{"ifname":"String"}
-	"scan":{"dump":"Boolean","ifname":"String"}
+	"scan":{"dump":"Boolean","ifname":"String","on_channel":"Boolean","ap_force":"Boolean"}
 	"cac":{"ifname":"String","channel":"Integer","width":"Integer"}
 	"reg":{"country":"String"}
 	"iface":{"phy":"Integer","sta":"Boolean","ap":"Boolean","mon":"Boolean","add":"String","delete":"String"}
@@ -65,6 +65,13 @@ scan - trigger a site survey. once complete a notification will be broadcast.
 			"channel_utilization": true,
 			"admission_capacity": 0
 		},
+		"ht": "40+",
+		"ht_channels": [
+			6,
+			10
+		],
+		"wifi_modes": "11b/g/n",
+		"band": "2.4GHz",
 		"wpa_version": 2,
 		"auth_suites": "psk",
 		"quality": 33,
@@ -95,3 +102,16 @@ the following events are generated
   - 'wifi.low.tx_rate': {"mac":"00:18:84:88:00:03","tx_rate":21700}
   - 'wifi.rps': {"mac":"00:18:84:88:00:03","tx_retries":46}
   - 'wifi.scan.done': {"ifname":"wlan0"}
+
+Automatic periodic scanning - to setup automatic periodic scanning set you need to specify:
+  - The PHY to bring up a scanning interface on or an interface that is already setup to use
+  - The time between scans in seconds.
+
+  Example Configuration:
+	u80211d.global.scan_phy=0 - Setup scanning interface on PHY 0
+	u80211d.global.scan_period=300 - Run a scan every 300 seconds (5 Minutes)
+
+  Example Configuration:
+	u80211d.global.scan_iface="wlan0" - Interface to scan on
+	u80211d.global.scan_period=300 - Run a scan every 300 seconds (5 Minutes)
+	u80211d.global.scan_ap_force=true - Run a scan even if the interface is an AP interface

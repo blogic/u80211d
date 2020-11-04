@@ -457,6 +457,14 @@ static void nl80211_handle_survey(struct nlattr **tb)
 	if (sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_BUSY])
 		blobmsg_add_u64(&s, "busy", nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_BUSY]));
 
+	if (sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_TX])
+		blobmsg_add_u64(&s, "tx", nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_TX]));
+
+	if (sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_RX])
+		blobmsg_add_u64(&s, "rx", nla_get_u64(sinfo[NL80211_SURVEY_INFO_CHANNEL_TIME_RX]));
+
+	blobmsg_add_u8(&s, "in_use", (sinfo[NL80211_SURVEY_INFO_IN_USE]) ? nla_get_u8(sinfo[NL80211_SURVEY_INFO_IN_USE]) : false);
+
 	blobmsg_close_table(&s, c);
 }
 
